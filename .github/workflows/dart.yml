@@ -40,3 +40,6 @@ jobs:
       # want to change this to 'flutter test'.
       - name: Run tests
         run: dart test
+
+      - name: Setup Dart SDK
+        uses: dart-lang/setup-dart@v1.7.1
