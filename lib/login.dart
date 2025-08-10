@@ -266,7 +266,7 @@ class ForgotPassword extends StatefulWidget {
   State<ForgotPassword> createState() => _ForgotPasswordState();
 }
 
-getUserName() {
+String getUserName() {
   return username;
 }
 

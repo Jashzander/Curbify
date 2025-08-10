@@ -87,7 +87,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
-  displayPaymentSheet() async {
+  Future<void> displayPaymentSheet() async {
     try {
       await Stripe.instance.presentPaymentSheet().then((value) {
         if (mounted) {
@@ -120,7 +120,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
-  createPaymentIntent(String amount, String currency) async {
+  Future<dynamic> createPaymentIntent(String amount, String currency) async {
     try {
       //Request body
       Map<String, dynamic> body = {
@@ -143,7 +143,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     }
   }
 
-  calculateAmount(String amount) {
+  String calculateAmount(String amount) {
     final calculatedAmout = (int.parse(amount)) * 100;
     return calculatedAmout.toString();
   }
