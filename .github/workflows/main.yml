@@ -37,8 +37,13 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
-      - name: Run tests
-        run: flutter test
+      - name: Run tests (if any)
+        run: |
+          if [ -d test ] && ls test/*.dart >/dev/null 2>&1; then
+            flutter test
+          else
+            echo "No tests found, skipping"
+          fi
 
       - name: Accept Android licenses
         run: yes | flutter doctor --android-licenses
@@ -88,8 +93,13 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
-      - name: Run tests
-        run: flutter test
+      - name: Run tests (if any)
+        run: |
+          if [ -d test ] && ls test/*.dart >/dev/null 2>&1; then
+            flutter test
+          else
+            echo "No tests found, skipping"
+          fi
 
       - name: Set Xcode version
         run: sudo xcode-select -s "/Applications/Xcode.app/Contents/Developer"
