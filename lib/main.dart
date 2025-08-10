@@ -6,8 +6,10 @@ import 'login.dart';
 import 'firebase_options.dart';
 import 'theme_provider.dart';
 import 'package:provider/provider.dart';
+import 'error_handler.dart';
 
 Future<void> main() async {
+  ErrorHandler.init();
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
   await Firebase.initializeApp(

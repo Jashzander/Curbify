@@ -2,41 +2,29 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:provider/provider.dart';
-import 'package:twilio_flutter/twilio_flutter.dart';
 import 'dart:math';
 import 'dart:io';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'request.dart';
 import 'log.dart';
 import 'settings.dart';
+import 'package:provider/provider.dart';
+import 'services/twilio_service.dart';
+import 'services/storage_service.dart';
 import 'theme_provider.dart';
-import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
 
-class Homepage extends StatefulWidget {
+class Homepage extends StatelessWidget {
   const Homepage({super.key, required this.company});
 
   final String? company;
 
   @override
-  State<Homepage> createState() => _HomepageState();
-}
-
-class _HomepageState extends State<Homepage> {
-  @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Ticket',
-      theme: context.watch<ThemeProvider>().themeData,
-      home: FormPage(title: '', company: widget.company),
-    );
+    return FormPage(title: '', company: company);
   }
 }
 
 class FormPage extends StatefulWidget {
-  const FormPage({Key? key, required this.title, required this.company})
-      : super(key: key);
+  const FormPage({super.key, required this.title, required this.company});
 
   final String title;
   final String? company;
@@ -120,13 +108,13 @@ class FormPageState extends State<FormPage> {
 }
 
 class ValetForm extends StatefulWidget {
-  ValetForm({
-    key,
+  const ValetForm({
+    super.key,
     required this.darkMode,
     required this.company,
-  }) : super(key: key);
+  });
 
-  bool darkMode;
+  final bool darkMode;
   final String? company;
 
   @override
@@ -139,7 +127,8 @@ class ValetFormState extends State<ValetForm> {
 
   final database = FirebaseDatabase.instance.ref();
 
-  late TwilioFlutter twilioFlutter;
+  final TwilioService _twilio = TwilioService();
+  final StorageService _storageService = StorageService();
 
   String _name = '';
   String _number = '';
@@ -150,12 +139,9 @@ class ValetFormState extends State<ValetForm> {
   String _color = '';
   String _parking = '';
   String _selectedTime = '';
-  String _replies = '';
-  int _TimeListCount = 0;
+  final int _timeListCount = 0;
   bool _nameCheck = false;
   bool _numCheck = false;
-  bool _hasBeenPressed1 = false; //for confirmation button
-  bool _hasBeenPressed2 = false; //for ticket button
   String _room = 'BLANK';
   Color _buttonColor = const Color.fromARGB(255, 39, 205, 243);
 
@@ -179,47 +165,38 @@ class ValetFormState extends State<ValetForm> {
   late BuildContext original;
   bool atLeastOne = false;
 
-  List<DropdownMenuItem<int>> TimeList = [];
+  List<DropdownMenuItem<int>> timeList = [];
   void loadTimeList() {
-    TimeList = [];
-    TimeList.add(const DropdownMenuItem(
+    timeList = [];
+    timeList.add(const DropdownMenuItem(
       value: 0,
       child: Text('-Select Time-'),
     ));
-    TimeList.add(const DropdownMenuItem(
+    timeList.add(const DropdownMenuItem(
       value: 1,
       child: Text('Hourly'),
     ));
-    TimeList.add(const DropdownMenuItem(
+    timeList.add(const DropdownMenuItem(
       value: 2,
       child: Text('Overnight'),
     ));
-    TimeList.add(const DropdownMenuItem(
+    timeList.add(const DropdownMenuItem(
       value: 3,
       child: Text('Restaurant'),
     ));
   }
 
-  late TwilioFlutter twilio;
-
   @override
   void initState() {
     super.initState();
-
-    twilio = TwilioFlutter(
-        accountSid: dotenv.env['TWILIO_ACCOUNT_SID']!,
-        authToken: dotenv.env['TWILIO_AUTH_TOKEN']!,
-        twilioNumber: dotenv.env['TWILIO_NUMBER']!);
   }
 
-  void sendSms(String number, String SmsMessage) async {
-    twilio.sendSMS(toNumber: '+1$number', messageBody: SmsMessage);
+  void sendSms(String number, String smsMessage) async {
+    _twilio.sendSms(toNumber: number, message: smsMessage);
   }
 
   void getAllMessages() async {
-    _replies = twilio.getSmsList().toString();
-
-    print(_replies);
+    // _replies = await _twilio.fetchAllMessages(); // This line was removed
   }
 
   void getRandNum() {
@@ -248,7 +225,6 @@ class ValetFormState extends State<ValetForm> {
 
   List<Widget> getFormWidget() {
     List<Widget> formWidget = [];
-    final usersRef = database.child('Users/');
 
     formWidget.add(
       Container(
@@ -272,9 +248,9 @@ class ValetFormState extends State<ValetForm> {
     formWidget.add(const SizedBox(height: 20));
 
     // Define a focus node
-    final FocusNode _nameFocusNode = FocusNode();
-    _nameFocusNode.addListener(() {
-      if (!_nameFocusNode.hasFocus) {
+    final FocusNode nameFocusNode = FocusNode();
+    nameFocusNode.addListener(() {
+      if (!nameFocusNode.hasFocus) {
         FocusManager.instance.primaryFocus?.unfocus();
       }
     });
@@ -300,14 +276,14 @@ class ValetFormState extends State<ValetForm> {
           }
           return null;
         },
-        focusNode: _nameFocusNode,
+        focusNode: nameFocusNode,
       ),
     );
 
     // Define a focus node
-    final FocusNode _roomFocusNode = FocusNode();
-    _roomFocusNode.addListener(() {
-      if (!_roomFocusNode.hasFocus) {
+    final FocusNode roomFocusNode = FocusNode();
+    roomFocusNode.addListener(() {
+      if (!roomFocusNode.hasFocus) {
         // If focus is lost, dismiss the keyboard
         FocusManager.instance.primaryFocus?.unfocus();
       }
@@ -326,7 +302,7 @@ class ValetFormState extends State<ValetForm> {
         onSaved: (value) {
           _room = value!;
         },
-        focusNode: _roomFocusNode,
+        focusNode: roomFocusNode,
       ),
     );
 
@@ -346,9 +322,9 @@ class ValetFormState extends State<ValetForm> {
     }
 
     // Define a focus node
-    final FocusNode _phoneNumberFocusNode = FocusNode();
-    _phoneNumberFocusNode.addListener(() {
-      if (!_phoneNumberFocusNode.hasFocus) {
+    final FocusNode phoneNumberFocusNode = FocusNode();
+    phoneNumberFocusNode.addListener(() {
+      if (!phoneNumberFocusNode.hasFocus) {
         // If focus is lost, dismiss the keyboard
         FocusManager.instance.primaryFocus?.unfocus();
       }
@@ -367,31 +343,15 @@ class ValetFormState extends State<ValetForm> {
           _number = value!;
         },
         // Assign the focus node
-        focusNode: _phoneNumberFocusNode,
+        focusNode: phoneNumberFocusNode,
       ),
     );
-
-    // Method to upload image to Firebase Storage and get its download URL
-    Future<String> uploadImageAndGetUrl(File imageFile) async {
-      if (imageFile == File('')) {
-        return '';
-      } else {
-        var imageName = DateTime.now().millisecondsSinceEpoch.toString();
-        var storageRef = firebase_storage.FirebaseStorage.instance
-            .ref()
-            .child('car_images/$imageName.jpg');
-        var uploadTask = await storageRef.putFile(imageFile);
-        final String downloadUrl = await uploadTask.ref.getDownloadURL();
-        return downloadUrl;
-      }
-    }
 
     void onPressedSubmit() {
       _formKey.currentState!.validate();
 
       if (_nameCheck == true && _numCheck == true) {
         setState(() {
-          _hasBeenPressed1 = true;
           _buttonColor = const Color.fromARGB(255, 72, 190, 126);
         });
 
@@ -413,8 +373,6 @@ class ValetFormState extends State<ValetForm> {
 
     void onPressedSubmit1() async {
       if (_formKey.currentState!.validate() && atLeastOne) {
-        _hasBeenPressed2 = true;
-
         try {
           final guest = database.child('${widget.company}/GuestList/');
           if (_room == '') {
@@ -441,21 +399,15 @@ class ValetFormState extends State<ValetForm> {
             'Left Image': leftImageUrl.toString(),
             'Right Image': rightImageUrl.toString()
           });
-
-          print("Guest has been updated!");
         } catch (e) {
-          print('You got an error! $e');
+          // You got an error!
         }
 
-        final snackBar = SnackBar(
-          content: Container(
-            margin: const EdgeInsets.fromLTRB(0, 10, 0, 0),
-            child: const Padding(
-                padding: EdgeInsets.fromLTRB(100, 0, 0, 0),
-                child: Text('Ticket Created', style: TextStyle(fontSize: 20))),
-          ),
-        );
-        ScaffoldMessenger.of(context).showSnackBar(snackBar);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Ticket Created'),
+          ));
+        }
 
         Future.delayed(const Duration(seconds: 2), () {
           var rndnumber = "";
@@ -507,8 +459,8 @@ class ValetFormState extends State<ValetForm> {
 
     formWidget.add(DropdownButtonFormField(
       decoration: const InputDecoration(labelText: 'Type'),
-      items: TimeList,
-      value: _TimeListCount == 0 ? null : _TimeListCount,
+      items: timeList,
+      value: _timeListCount == 0 ? null : _timeListCount,
       onChanged: (newValue) {
         setState(() {
           if (newValue == 1) {
@@ -527,9 +479,9 @@ class ValetFormState extends State<ValetForm> {
     ));
 
     // Define a focus node
-    final FocusNode _brandFocusNode = FocusNode();
-    _brandFocusNode.addListener(() {
-      if (!_brandFocusNode.hasFocus) {
+    final FocusNode brandFocusNode = FocusNode();
+    brandFocusNode.addListener(() {
+      if (!brandFocusNode.hasFocus) {
         // If focus is lost, dismiss the keyboard
         FocusManager.instance.primaryFocus?.unfocus();
       }
@@ -559,14 +511,14 @@ class ValetFormState extends State<ValetForm> {
           _brand = value!;
         },
         // Assign the focus node
-        focusNode: _brandFocusNode,
+        focusNode: brandFocusNode,
       ),
     );
 
     // Define a focus node
-    final FocusNode _modelFocusNode = FocusNode();
-    _modelFocusNode.addListener(() {
-      if (!_modelFocusNode.hasFocus) {
+    final FocusNode modelFocusNode = FocusNode();
+    modelFocusNode.addListener(() {
+      if (!modelFocusNode.hasFocus) {
         // If focus is lost, dismiss the keyboard
         FocusManager.instance.primaryFocus?.unfocus();
       }
@@ -590,14 +542,14 @@ class ValetFormState extends State<ValetForm> {
           _model = value!;
         },
         // Assign the focus node
-        focusNode: _modelFocusNode,
+        focusNode: modelFocusNode,
       ),
     );
 
     // Define a focus node
-    final FocusNode _licenseFocusNode = FocusNode();
-    _licenseFocusNode.addListener(() {
-      if (!_licenseFocusNode.hasFocus) {
+    final FocusNode licenseFocusNode = FocusNode();
+    licenseFocusNode.addListener(() {
+      if (!licenseFocusNode.hasFocus) {
         // If focus is lost, dismiss the keyboard
         FocusManager.instance.primaryFocus?.unfocus();
       }
@@ -621,14 +573,14 @@ class ValetFormState extends State<ValetForm> {
           _license = value!;
         },
         // Assign the focus node
-        focusNode: _licenseFocusNode,
+        focusNode: licenseFocusNode,
       ),
     );
 
     // Define a focus node
-    final FocusNode _colorFocusNode = FocusNode();
-    _colorFocusNode.addListener(() {
-      if (!_colorFocusNode.hasFocus) {
+    final FocusNode colorFocusNode = FocusNode();
+    colorFocusNode.addListener(() {
+      if (!colorFocusNode.hasFocus) {
         // If focus is lost, dismiss the keyboard
         FocusManager.instance.primaryFocus?.unfocus();
       }
@@ -657,13 +609,13 @@ class ValetFormState extends State<ValetForm> {
       onSaved: (value) {
         _color = value!;
       },
-      focusNode: _colorFocusNode,
+      focusNode: colorFocusNode,
     ));
 
     // Define a focus node
-    final FocusNode _parkingFocusNode = FocusNode();
-    _parkingFocusNode.addListener(() {
-      if (!_parkingFocusNode.hasFocus) {
+    final FocusNode parkingFocusNode = FocusNode();
+    parkingFocusNode.addListener(() {
+      if (!parkingFocusNode.hasFocus) {
         // If focus is lost, dismiss the keyboard
         FocusManager.instance.primaryFocus?.unfocus();
       }
@@ -680,7 +632,7 @@ class ValetFormState extends State<ValetForm> {
         onSaved: (value) {
           _parking = value!;
         },
-        focusNode: _parkingFocusNode,
+        focusNode: parkingFocusNode,
       ),
     );
 
@@ -690,14 +642,18 @@ class ValetFormState extends State<ValetForm> {
 
     // FRONT
     Future<void> frontCamera(BuildContext context) async {
+      final navigator = Navigator.of(context);
       var imgCamera = await frontPicker.pickImage(source: ImageSource.camera);
       setState(() {
         frontImg = File(imgCamera!.path);
         _front = true;
         atLeastOne = true;
       });
-      frontImageUrl = await uploadImageAndGetUrl(frontImg);
-      Navigator.of(context).pop();
+      frontImageUrl = await _storageService.uploadImage(
+          frontImg, 'car_images/${DateTime.now().millisecondsSinceEpoch}.jpg');
+      if (mounted) {
+        navigator.pop();
+      }
     }
 
     Future<void> frontBuffer(BuildContext context) {
@@ -723,14 +679,18 @@ class ValetFormState extends State<ValetForm> {
 
     // BACK
     Future<void> backCamera(BuildContext context) async {
+      final navigator = Navigator.of(context);
       var imgCamera = await backPicker.pickImage(source: ImageSource.camera);
       setState(() {
         backImg = File(imgCamera!.path);
         _back = true;
         atLeastOne = true;
       });
-      backImageUrl = await uploadImageAndGetUrl(backImg);
-      Navigator.of(context).pop();
+      backImageUrl = await _storageService.uploadImage(
+          backImg, 'car_images/${DateTime.now().millisecondsSinceEpoch}.jpg');
+      if (mounted) {
+        navigator.pop();
+      }
     }
 
     Future<void> backBuffer(BuildContext context) {
@@ -756,14 +716,18 @@ class ValetFormState extends State<ValetForm> {
 
     // LEFT
     Future<void> leftCamera(BuildContext context) async {
+      final navigator = Navigator.of(context);
       var imgCamera = await leftPicker.pickImage(source: ImageSource.camera);
       setState(() {
         leftImg = File(imgCamera!.path);
         _left = true;
         atLeastOne = true;
       });
-      leftImageUrl = await uploadImageAndGetUrl(leftImg);
-      Navigator.of(context).pop();
+      leftImageUrl = await _storageService.uploadImage(
+          leftImg, 'car_images/${DateTime.now().millisecondsSinceEpoch}.jpg');
+      if (mounted) {
+        navigator.pop();
+      }
     }
 
     Future<void> leftBuffer(BuildContext context) {
@@ -789,14 +753,18 @@ class ValetFormState extends State<ValetForm> {
 
     // RIGHT
     Future<void> rightCamera(BuildContext context) async {
+      final navigator = Navigator.of(context);
       var imgCamera = await rightPicker.pickImage(source: ImageSource.camera);
       setState(() {
         rightImg = File(imgCamera!.path);
         _right = true;
         atLeastOne = true;
       });
-      rightImageUrl = await uploadImageAndGetUrl(rightImg);
-      Navigator.of(context).pop();
+      rightImageUrl = await _storageService.uploadImage(
+          rightImg, 'car_images/${DateTime.now().millisecondsSinceEpoch}.jpg');
+      if (mounted) {
+        navigator.pop();
+      }
     }
 
     Future<void> rightBuffer(BuildContext context) {

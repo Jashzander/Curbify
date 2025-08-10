@@ -1,26 +1,22 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class Payment extends StatelessWidget {
   const Payment({super.key, required this.company});
   final String? company;
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-        // theme: _buildTheme(),
-        debugShowCheckedModeBanner: false,
-        initialRoute: '/',
-        routes: {
-          '/': (context) => const PaymentScreen(),
-        },
-      );
+  Widget build(BuildContext context) {
+    return PaymentScreen(company: company);
+  }
 }
 
 class PaymentScreen extends StatefulWidget {
-  const PaymentScreen({super.key});
+  const PaymentScreen({super.key, required this.company});
+  final String? company;
 
   @override
   State<PaymentScreen> createState() => _PaymentScreenState();
@@ -94,47 +90,33 @@ class _PaymentScreenState extends State<PaymentScreen> {
   displayPaymentSheet() async {
     try {
       await Stripe.instance.presentPaymentSheet().then((value) {
-        showDialog(
-            context: context,
-            builder: (_) => const AlertDialog(
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.check_circle,
-                        color: Colors.green,
-                        size: 100.0,
-                      ),
-                      SizedBox(height: 10.0),
-                      Text("Payment Successful!"),
-                    ],
-                  ),
-                ));
+        if (mounted) {
+          showDialog(
+              context: context,
+              builder: (_) => const AlertDialog(
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.check_circle,
+                          color: Colors.green,
+                          size: 100.0,
+                        ),
+                        SizedBox(height: 10.0),
+                        Text("Payment Successful!"),
+                      ],
+                    ),
+                  ));
+        }
 
         paymentIntent = null;
       }).onError((error, stackTrace) {
         throw Exception(error);
       });
-    } on StripeException catch (e) {
-      print('Error is:---> $e');
-      const AlertDialog(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.cancel,
-                  color: Colors.red,
-                ),
-                Text("Payment Failed"),
-              ],
-            ),
-          ],
-        ),
-      );
+    } on StripeException {
+      // Error is:---> e
     } catch (e) {
-      print('$e');
+      // e
     }
   }
 

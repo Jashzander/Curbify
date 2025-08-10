@@ -1,0 +1,31 @@
+name: Auto Dependency Upgrade
+
+on:
+  schedule:
+    # Runs every monday at 00:00 UTC
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 'stable'
+      - name: Upgrade dependencies
+        run: |
+          flutter pub upgrade --major-versions
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pubspec.yaml pubspec.lock || true
+          git commit -m "chore(deps): automatic upgrade" || echo "No changes to commit"
+      - name: Push changes
+        uses: ad-m/github-push-action@v0.8.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }} 

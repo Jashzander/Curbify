@@ -1,9 +1,9 @@
 import 'dart:math';
-import 'dart:io';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'homepage.dart';
 import 'package:mailer/smtp_server/gmail.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:mailer/mailer.dart';
 
 // import 'package:twilio_dart_api/models/credential.dart';
@@ -208,8 +208,8 @@ class _LoginState extends State<Login> {
                                   keys.first; // Assuming there's only one match
                               if (values[userKey]['password'] == password) {
                                 company = values[userKey]['company'];
-                                Navigator.push(
-                                  context,
+                                if (!context.mounted) return;
+                                Navigator.of(context).push(
                                   MaterialPageRoute(
                                       builder: (context) => Homepage(
                                             company: company,
@@ -218,6 +218,7 @@ class _LoginState extends State<Login> {
                               } else {
                                 // Password is incorrect
                                 // Handle the case where the password is incorrect
+                                if (!context.mounted) return;
                                 setState(() {
                                   passwordOrUsername = true;
                                 });
@@ -227,12 +228,13 @@ class _LoginState extends State<Login> {
                         } else {
                           // Username doesn't exist in the database
                           // Handle the case where the username is not found
+                          if (!context.mounted) return;
                           setState(() {
                             passwordOrUsername = true;
                           });
                         }
                       } catch (error) {
-                        print("Error retrieving data: $error");
+                        // print("Error retrieving data: $error");
                         // Handle the error
                       }
                     },
@@ -291,9 +293,8 @@ class _ForgotPasswordState extends State<ForgotPassword> {
   }
 
   void sendEmail(String recipientEmail, String verificationCode) async {
-    String username = 'jashitandryan@gmail.com'; //Your Email
-    String password =
-        'lqtfnjweouxglsha'; // 16 Digits App Password Generated From Google Account
+    final String username = dotenv.env['SMTP_USER'] ?? '';
+    final String password = dotenv.env['SMTP_PASS'] ?? '';
 
     final smtpServer = gmail(username, password);
     // Use the SmtpServer class to configure an SMTP server:
@@ -319,13 +320,13 @@ class _ForgotPasswordState extends State<ForgotPassword> {
         ;
 
     try {
-      final sendReport = await send(message, smtpServer);
-      print('Message sent: $sendReport');
+      /*final sendReport = */ await send(message, smtpServer);
+      // print('Message sent: $sendReport');
     } on MailerException catch (e) {
-      print('Message not sent.');
-      print(e.message);
-      for (var p in e.problems) {
-        print('Problem: ${p.code}: ${p.msg}');
+      // print('Message not sent.');
+      // print(e.message);
+      for (var _ in e.problems) {
+        // print('Problem: ${p.code}: ${p.msg}');
       }
     }
   }
@@ -408,17 +409,19 @@ class _ForgotPasswordState extends State<ForgotPassword> {
                           // Username exists in the database
                           verificationCode = generateRandomString();
                           sendEmail(email, verificationCode);
+                          if (!context.mounted) return;
                           setState(() {
                             sentEmail = true;
                           });
                         } else {
                           // Username doesn't exist in the database
+                          if (!context.mounted) return;
                           setState(() {
                             emailPresent = false;
                           });
                         }
                       } catch (error) {
-                        print("Error retrieving data: $error");
+                        // print("Error retrieving data: $error");
                         // Handle the error
                       }
                     },
@@ -445,6 +448,7 @@ class _ForgotPasswordState extends State<ForgotPassword> {
                   ElevatedButton(
                     onPressed: () {
                       if (verificationCode == codeController.text) {
+                        if (!context.mounted) return;
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -465,9 +469,9 @@ class _ForgotPasswordState extends State<ForgotPassword> {
 }
 
 class ResetPassword extends StatefulWidget {
-  ResetPassword({super.key, required this.email});
+  const ResetPassword({super.key, required this.email});
 
-  String email;
+  final String email;
 
   @override
   State<ResetPassword> createState() => _ResetPasswordState();
@@ -608,13 +612,14 @@ class _ResetPasswordState extends State<ResetPassword> {
                               };
                               // Set the user data under the generated user ID
                               await userRef.child(userKey).update(userData);
-                              Navigator.push(
-                                context,
+                              if (!context.mounted) return;
+                              Navigator.of(context).push(
                                 MaterialPageRoute(
                                     builder: (context) =>
                                         const ForgotPassword()),
                               );
                             } else {
+                              if (!context.mounted) return;
                               setState(() {
                                 match = false;
                               });
@@ -624,7 +629,7 @@ class _ResetPasswordState extends State<ResetPassword> {
                       }
                       // else {}
                     } catch (error) {
-                      print("Error retrieving data: $error");
+                      // print("Error retrieving data: $error");
                     }
                   },
                   child: const Text('Next'),
@@ -779,22 +784,23 @@ class _SignUpState extends State<SignUp> {
                           company = userData['company'] as String?;
                         }
                         if (companyName == company) {
-                          Navigator.push(
-                            context,
+                          if (!context.mounted) return;
+                          Navigator.of(context).push(
                             MaterialPageRoute(
                                 builder: (context) => Credentials(
                                     userId: userId, company: company)),
                           );
                         }
                       } else {
+                        if (!context.mounted) return;
                         setState(() {
-                          print(credentials);
+                          // print(credentials);
                           credentials = false;
-                          print(credentials);
+                          // print(credentials);
                         });
                       }
                     } catch (error) {
-                      print("Error retrieving data: $error");
+                      // print("Error retrieving data: $error");
                       // Handle the error
                     }
                   },
@@ -975,16 +981,17 @@ class _CredentialsState extends State<Credentials> {
                         // Set the user data under the generated user ID
                         await userRef.child(widget.userId).update(userData);
 
+                        if (!context.mounted) return;
                         // Navigate to the next screen after saving the user data
-                        Navigator.push(
-                          context,
+                        Navigator.of(context).push(
                           MaterialPageRoute(
                               builder: (context) => Homepage(
                                     company: widget.company,
                                   )),
                         );
                       } catch (error) {
-                        print("Error saving user data: $error");
+                        // print("Error saving user data: $error");
+                        if (!context.mounted) return;
                         setState(() {
                           empty = false;
                         });

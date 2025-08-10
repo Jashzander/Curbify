@@ -1,5 +1,5 @@
 # Uncomment this line to define a global platform for your project
-platform :ios, '16.0'
+platform :ios, '18.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -9,7 +9,6 @@ project 'Runner', {
   'Profile' => :release,
   'Release' => :release,
 }
-
 
 def flutter_root
   generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
@@ -29,8 +28,7 @@ require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelpe
 flutter_ios_podfile_setup
 
 target 'Runner' do
-  use_frameworks!
-  use_modular_headers!
+  use_frameworks! :linkage => :static
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do
@@ -40,6 +38,41 @@ end
 
 post_install do |installer|
   installer.pods_project.targets.each do |target|
+    # START: Standard Flutter & common fixes
+    target.build_configurations.each do |config|
+      config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
+      # Raise all pods to iOS 18 deployment target per project requirement
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '18.0'
+    end
+    if target.name == 'BoringSSL-GRPC'
+      target.source_build_phase.files.each do |file|
+        if file.settings && file.settings['COMPILER_FLAGS']
+          flags = file.settings['COMPILER_FLAGS'].split
+          flags.reject! { |flag| flag == '-GCC_WARN_INHIBIT_ALL_WARNINGS' }
+          file.settings['COMPILER_FLAGS'] = flags.join(' ')
+        end
+      end
+    end
     flutter_additional_ios_build_settings(target)
+    # END: Standard Flutter & common fixes
+  end
+
+  # Fix Firebase plugin umbrella header import under static frameworks by targeting local symlinks
+  # Replace '#import <Firebase/Firebase.h>' with the appropriate module import
+  plugins_symlink_dir = File.expand_path(File.join(__dir__, '.symlinks', 'plugins'))
+  if Dir.exist?(plugins_symlink_dir)
+    Dir.glob(File.join(plugins_symlink_dir, 'firebase_*', 'ios', 'Classes', '**', '*.{h,m,mm}')).each do |file_path|
+      next unless File.file?(file_path)
+      content = File.read(file_path)
+      next unless content.include?('#import <Firebase/Firebase.h>')
+
+      plugin_name_match = file_path.match(/firebase_([^\/]+)/)
+      next unless plugin_name_match
+
+      module_name = "Firebase#{plugin_name_match[1].split('_').map(&:capitalize).join('')}"
+      replacement = "@import #{module_name};"
+      content.gsub!('#import <Firebase/Firebase.h>', replacement)
+      File.open(file_path, 'w') { |file| file.puts content }
+    end
   end
 end
