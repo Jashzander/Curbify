@@ -1,0 +1,49 @@
+{
+  "project_info": {
+    "project_number": "377207291354",
+    "firebase_url": "https://valet-app-e4af0-default-rtdb.firebaseio.com",
+    "project_id": "valet-app-e4af0",
+    "storage_bucket": "valet-app-e4af0.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:377207291354:android:97cb3b740decf5905bd4e3",
+        "android_client_info": {
+          "package_name": "com.example.curbifyValet"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAlcr7kDF4lB4cIBTVQEZ9Tm4k6KNAY-wc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:377207291354:android:8a33ad271a9a0f255bd4e3",
+        "android_client_info": {
+          "package_name": "com.example.flutter_curbify"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAlcr7kDF4lB4cIBTVQEZ9Tm4k6KNAY-wc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

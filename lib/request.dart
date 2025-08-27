@@ -47,9 +47,12 @@ class _RequestState extends State<Request> {
     // Initialize Twilio here with proper error handling
     try {
       twilio = TwilioFlutter(
-        accountSid: const String.fromEnvironment('TWILIO_ACCOUNT_SID', defaultValue: ''),
-        authToken: const String.fromEnvironment('TWILIO_AUTH_TOKEN', defaultValue: ''),
-        twilioNumber: const String.fromEnvironment('TWILIO_NUMBER', defaultValue: ''),
+        accountSid: const String.fromEnvironment('TWILIO_ACCOUNT_SID',
+            defaultValue: ''),
+        authToken:
+            const String.fromEnvironment('TWILIO_AUTH_TOKEN', defaultValue: ''),
+        twilioNumber:
+            const String.fromEnvironment('TWILIO_NUMBER', defaultValue: ''),
       );
     } catch (e) {
       print('Failed to initialize Twilio: $e');
