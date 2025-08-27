@@ -51,5 +51,14 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>This app requires access to devices on your local network.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_dartVmService._tcp.</string>
+		<string>_ipp._tcp.</string>
+		<string>_ipps._tcp.</string>
+		<string>_printer._tcp.</string>
+	</array>
 </dict>
 </plist>

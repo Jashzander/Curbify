@@ -1,30 +1,55 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
+import 'package:twilio_flutter/twilio_flutter.dart';
 import 'dart:math';
 import 'dart:io';
 import 'request.dart';
 import 'log.dart';
 import 'settings.dart';
-import 'package:provider/provider.dart';
-import 'services/twilio_service.dart';
-import 'services/storage_service.dart';
 import 'theme_provider.dart';
+import 'package:firebase_storage/firebase_storage.dart' as firebase_storage;
 
-class Homepage extends StatelessWidget {
+class Homepage extends StatefulWidget {
   const Homepage({super.key, required this.company});
 
   final String? company;
 
   @override
+  State<Homepage> createState() => _HomepageState();
+}
+
+class _HomepageState extends State<Homepage> {
+  final Future<FirebaseApp> _fbApp = Firebase.initializeApp();
+
+  @override
   Widget build(BuildContext context) {
-    return FormPage(title: '', company: company);
+    return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'Ticket',
+        theme: context.watch<ThemeProvider>().themeData,
+        home: FutureBuilder(
+          future: _fbApp,
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              print('You have an error! ${snapshot.error.toString()}');
+              return Text('Something went wrong!');
+            } else if (snapshot.hasData) {
+              return FormPage(title: '', company: widget.company);
+            } else {
+              return Center(child: CircularProgressIndicator());
+            }
+          },
+        ));
   }
 }
 
 class FormPage extends StatefulWidget {
-  const FormPage({super.key, required this.title, required this.company});
+  const FormPage({Key? key, required this.title, required this.company})
+      : super(key: key);
 
   final String title;
   final String? company;
@@ -108,13 +133,13 @@ class FormPageState extends State<FormPage> {
 }
 
 class ValetForm extends StatefulWidget {
-  const ValetForm({
-    super.key,
+  ValetForm({
+    key,
     required this.darkMode,
     required this.company,
-  });
+  }) : super(key: key);
 
-  final bool darkMode;
+  bool darkMode;
   final String? company;
 
   @override
@@ -127,8 +152,7 @@ class ValetFormState extends State<ValetForm> {
 
   final database = FirebaseDatabase.instance.ref();
 
-  final TwilioService _twilio = TwilioService();
-  final StorageService _storageService = StorageService();
+  late TwilioFlutter twilioFlutter;
 
   String _name = '';
   String _number = '';
@@ -139,9 +163,12 @@ class ValetFormState extends State<ValetForm> {
   String _color = '';
   String _parking = '';
   String _selectedTime = '';
-  final int _timeListCount = 0;
+  // Removed replies fetching due to runtime issues in twilio_flutter getSmsList
+  int _TimeListCount = 0;
   bool _nameCheck = false;
   bool _numCheck = false;
+  bool _hasBeenPressed1 = false; //for confirmation button
+  bool _hasBeenPressed2 = false; //for ticket button
   String _room = 'BLANK';
   Color _buttonColor = const Color.fromARGB(255, 39, 205, 243);
 
@@ -165,39 +192,44 @@ class ValetFormState extends State<ValetForm> {
   late BuildContext original;
   bool atLeastOne = false;
 
-  List<DropdownMenuItem<int>> timeList = [];
+  List<DropdownMenuItem<int>> TimeList = [];
   void loadTimeList() {
-    timeList = [];
-    timeList.add(const DropdownMenuItem(
+    TimeList = [];
+    TimeList.add(const DropdownMenuItem(
       value: 0,
       child: Text('-Select Time-'),
     ));
-    timeList.add(const DropdownMenuItem(
+    TimeList.add(const DropdownMenuItem(
       value: 1,
       child: Text('Hourly'),
     ));
-    timeList.add(const DropdownMenuItem(
+    TimeList.add(const DropdownMenuItem(
       value: 2,
       child: Text('Overnight'),
     ));
-    timeList.add(const DropdownMenuItem(
+    TimeList.add(const DropdownMenuItem(
       value: 3,
       child: Text('Restaurant'),
     ));
   }
 
+  late TwilioFlutter twilio;
+
   @override
   void initState() {
     super.initState();
+
+    twilio = TwilioFlutter(
+        accountSid: const String.fromEnvironment('TWILIO_ACCOUNT_SID', defaultValue: ''),
+        authToken: const String.fromEnvironment('TWILIO_AUTH_TOKEN', defaultValue: ''),
+        twilioNumber: const String.fromEnvironment('TWILIO_NUMBER', defaultValue: ''));
   }
 
-  void sendSms(String number, String smsMessage) async {
-    _twilio.sendSms(toNumber: number, message: smsMessage);
+  void sendSms(String number, String SmsMessage) async {
+    twilio.sendSMS(toNumber: '+1$number', messageBody: SmsMessage);
   }
 
-  void getAllMessages() async {
-    // _replies = await _twilio.fetchAllMessages(); // This line was removed
-  }
+  // Removed getAllMessages as the package throws at runtime
 
   void getRandNum() {
     if (_randNum == '') {
@@ -225,6 +257,7 @@ class ValetFormState extends State<ValetForm> {
 
   List<Widget> getFormWidget() {
     List<Widget> formWidget = [];
+    final usersRef = database.child('Users/');
 
     formWidget.add(
       Container(
@@ -248,9 +281,9 @@ class ValetFormState extends State<ValetForm> {
     formWidget.add(const SizedBox(height: 20));
 
     // Define a focus node
-    final FocusNode nameFocusNode = FocusNode();
-    nameFocusNode.addListener(() {
-      if (!nameFocusNode.hasFocus) {
+    final FocusNode _nameFocusNode = FocusNode();
+    _nameFocusNode.addListener(() {
+      if (!_nameFocusNode.hasFocus) {
         FocusManager.instance.primaryFocus?.unfocus();
       }
     });
@@ -276,14 +309,14 @@ class ValetFormState extends State<ValetForm> {
           }
           return null;
         },
-        focusNode: nameFocusNode,
+        focusNode: _nameFocusNode,
       ),
     );
 
     // Define a focus node
-    final FocusNode roomFocusNode = FocusNode();
-    roomFocusNode.addListener(() {
-      if (!roomFocusNode.hasFocus) {
+    final FocusNode _roomFocusNode = FocusNode();
+    _roomFocusNode.addListener(() {
+      if (!_roomFocusNode.hasFocus) {
         // If focus is lost, dismiss the keyboard
         FocusManager.instance.primaryFocus?.unfocus();
       }
@@ -302,7 +335,7 @@ class ValetFormState extends State<ValetForm> {
         onSaved: (value) {
           _room = value!;
         },
-        focusNode: roomFocusNode,
+        focusNode: _roomFocusNode,
       ),
     );
 
@@ -322,9 +355,9 @@ class ValetFormState extends State<ValetForm> {
     }
 
     // Define a focus node
-    final FocusNode phoneNumberFocusNode = FocusNode();
-    phoneNumberFocusNode.addListener(() {
-      if (!phoneNumberFocusNode.hasFocus) {
+    final FocusNode _phoneNumberFocusNode = FocusNode();
+    _phoneNumberFocusNode.addListener(() {
+      if (!_phoneNumberFocusNode.hasFocus) {
         // If focus is lost, dismiss the keyboard
         FocusManager.instance.primaryFocus?.unfocus();
       }
@@ -343,21 +376,36 @@ class ValetFormState extends State<ValetForm> {
           _number = value!;
         },
         // Assign the focus node
-        focusNode: phoneNumberFocusNode,
+        focusNode: _phoneNumberFocusNode,
       ),
     );
+
+    // Method to upload image to Firebase Storage and get its download URL
+    Future<String> uploadImageAndGetUrl(File imageFile) async {
+      if (imageFile == File('')) {
+        return '';
+      } else {
+        var imageName = DateTime.now().millisecondsSinceEpoch.toString();
+        var storageRef = firebase_storage.FirebaseStorage.instance
+            .ref()
+            .child('car_images/$imageName.jpg');
+        var uploadTask = await storageRef.putFile(imageFile);
+        final String downloadUrl = await uploadTask.ref.getDownloadURL();
+        return downloadUrl;
+      }
+    }
 
     void onPressedSubmit() {
       _formKey.currentState!.validate();
 
       if (_nameCheck == true && _numCheck == true) {
         setState(() {
+          _hasBeenPressed1 = true;
           _buttonColor = const Color.fromARGB(255, 72, 190, 126);
         });
 
         sendSms(_number,
             "Your car has been parked. Reply with 'car' to this message when you want to get the car back!");
-        getAllMessages();
         final snackBar = SnackBar(
           content: Container(
             margin: const EdgeInsets.fromLTRB(0, 10, 0, 0),
@@ -373,6 +421,8 @@ class ValetFormState extends State<ValetForm> {
 
     void onPressedSubmit1() async {
       if (_formKey.currentState!.validate() && atLeastOne) {
+        _hasBeenPressed2 = true;
+
         try {
           final guest = database.child('${widget.company}/GuestList/');
           if (_room == '') {
@@ -399,15 +449,21 @@ class ValetFormState extends State<ValetForm> {
             'Left Image': leftImageUrl.toString(),
             'Right Image': rightImageUrl.toString()
           });
+
+          print("Guest has been updated!");
         } catch (e) {
-          // You got an error!
+          print('You got an error! $e');
         }
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Ticket Created'),
-          ));
-        }
+        final snackBar = SnackBar(
+          content: Container(
+            margin: const EdgeInsets.fromLTRB(0, 10, 0, 0),
+            child: const Padding(
+                padding: EdgeInsets.fromLTRB(100, 0, 0, 0),
+                child: Text('Ticket Created', style: TextStyle(fontSize: 20))),
+          ),
+        );
+        ScaffoldMessenger.of(context).showSnackBar(snackBar);
 
         Future.delayed(const Duration(seconds: 2), () {
           var rndnumber = "";
@@ -459,8 +515,8 @@ class ValetFormState extends State<ValetForm> {
 
     formWidget.add(DropdownButtonFormField(
       decoration: const InputDecoration(labelText: 'Type'),
-      items: timeList,
-      value: _timeListCount == 0 ? null : _timeListCount,
+      items: TimeList,
+      value: _TimeListCount == 0 ? null : _TimeListCount,
       onChanged: (newValue) {
         setState(() {
           if (newValue == 1) {
@@ -479,9 +535,9 @@ class ValetFormState extends State<ValetForm> {
     ));
 
     // Define a focus node
-    final FocusNode brandFocusNode = FocusNode();
-    brandFocusNode.addListener(() {
-      if (!brandFocusNode.hasFocus) {
+    final FocusNode _brandFocusNode = FocusNode();
+    _brandFocusNode.addListener(() {
+      if (!_brandFocusNode.hasFocus) {
         // If focus is lost, dismiss the keyboard
         FocusManager.instance.primaryFocus?.unfocus();
       }
@@ -511,14 +567,14 @@ class ValetFormState extends State<ValetForm> {
           _brand = value!;
         },
         // Assign the focus node
-        focusNode: brandFocusNode,
+        focusNode: _brandFocusNode,
       ),
     );
 
     // Define a focus node
-    final FocusNode modelFocusNode = FocusNode();
-    modelFocusNode.addListener(() {
-      if (!modelFocusNode.hasFocus) {
+    final FocusNode _modelFocusNode = FocusNode();
+    _modelFocusNode.addListener(() {
+      if (!_modelFocusNode.hasFocus) {
         // If focus is lost, dismiss the keyboard
         FocusManager.instance.primaryFocus?.unfocus();
       }
@@ -542,14 +598,14 @@ class ValetFormState extends State<ValetForm> {
           _model = value!;
         },
         // Assign the focus node
-        focusNode: modelFocusNode,
+        focusNode: _modelFocusNode,
       ),
     );
 
     // Define a focus node
-    final FocusNode licenseFocusNode = FocusNode();
-    licenseFocusNode.addListener(() {
-      if (!licenseFocusNode.hasFocus) {
+    final FocusNode _licenseFocusNode = FocusNode();
+    _licenseFocusNode.addListener(() {
+      if (!_licenseFocusNode.hasFocus) {
         // If focus is lost, dismiss the keyboard
         FocusManager.instance.primaryFocus?.unfocus();
       }
@@ -573,14 +629,14 @@ class ValetFormState extends State<ValetForm> {
           _license = value!;
         },
         // Assign the focus node
-        focusNode: licenseFocusNode,
+        focusNode: _licenseFocusNode,
       ),
     );
 
     // Define a focus node
-    final FocusNode colorFocusNode = FocusNode();
-    colorFocusNode.addListener(() {
-      if (!colorFocusNode.hasFocus) {
+    final FocusNode _colorFocusNode = FocusNode();
+    _colorFocusNode.addListener(() {
+      if (!_colorFocusNode.hasFocus) {
         // If focus is lost, dismiss the keyboard
         FocusManager.instance.primaryFocus?.unfocus();
       }
@@ -609,13 +665,13 @@ class ValetFormState extends State<ValetForm> {
       onSaved: (value) {
         _color = value!;
       },
-      focusNode: colorFocusNode,
+      focusNode: _colorFocusNode,
     ));
 
     // Define a focus node
-    final FocusNode parkingFocusNode = FocusNode();
-    parkingFocusNode.addListener(() {
-      if (!parkingFocusNode.hasFocus) {
+    final FocusNode _parkingFocusNode = FocusNode();
+    _parkingFocusNode.addListener(() {
+      if (!_parkingFocusNode.hasFocus) {
         // If focus is lost, dismiss the keyboard
         FocusManager.instance.primaryFocus?.unfocus();
       }
@@ -632,7 +688,7 @@ class ValetFormState extends State<ValetForm> {
         onSaved: (value) {
           _parking = value!;
         },
-        focusNode: parkingFocusNode,
+        focusNode: _parkingFocusNode,
       ),
     );
 
@@ -642,18 +698,14 @@ class ValetFormState extends State<ValetForm> {
 
     // FRONT
     Future<void> frontCamera(BuildContext context) async {
-      final navigator = Navigator.of(context);
       var imgCamera = await frontPicker.pickImage(source: ImageSource.camera);
       setState(() {
         frontImg = File(imgCamera!.path);
         _front = true;
         atLeastOne = true;
       });
-      frontImageUrl = await _storageService.uploadImage(
-          frontImg, 'car_images/${DateTime.now().millisecondsSinceEpoch}.jpg');
-      if (mounted) {
-        navigator.pop();
-      }
+      frontImageUrl = await uploadImageAndGetUrl(frontImg);
+      Navigator.of(context).pop();
     }
 
     Future<void> frontBuffer(BuildContext context) {
@@ -679,18 +731,14 @@ class ValetFormState extends State<ValetForm> {
 
     // BACK
     Future<void> backCamera(BuildContext context) async {
-      final navigator = Navigator.of(context);
       var imgCamera = await backPicker.pickImage(source: ImageSource.camera);
       setState(() {
         backImg = File(imgCamera!.path);
         _back = true;
         atLeastOne = true;
       });
-      backImageUrl = await _storageService.uploadImage(
-          backImg, 'car_images/${DateTime.now().millisecondsSinceEpoch}.jpg');
-      if (mounted) {
-        navigator.pop();
-      }
+      backImageUrl = await uploadImageAndGetUrl(backImg);
+      Navigator.of(context).pop();
     }
 
     Future<void> backBuffer(BuildContext context) {
@@ -716,18 +764,14 @@ class ValetFormState extends State<ValetForm> {
 
     // LEFT
     Future<void> leftCamera(BuildContext context) async {
-      final navigator = Navigator.of(context);
       var imgCamera = await leftPicker.pickImage(source: ImageSource.camera);
       setState(() {
         leftImg = File(imgCamera!.path);
         _left = true;
         atLeastOne = true;
       });
-      leftImageUrl = await _storageService.uploadImage(
-          leftImg, 'car_images/${DateTime.now().millisecondsSinceEpoch}.jpg');
-      if (mounted) {
-        navigator.pop();
-      }
+      leftImageUrl = await uploadImageAndGetUrl(leftImg);
+      Navigator.of(context).pop();
     }
 
     Future<void> leftBuffer(BuildContext context) {
@@ -753,18 +797,14 @@ class ValetFormState extends State<ValetForm> {
 
     // RIGHT
     Future<void> rightCamera(BuildContext context) async {
-      final navigator = Navigator.of(context);
       var imgCamera = await rightPicker.pickImage(source: ImageSource.camera);
       setState(() {
         rightImg = File(imgCamera!.path);
         _right = true;
         atLeastOne = true;
       });
-      rightImageUrl = await _storageService.uploadImage(
-          rightImg, 'car_images/${DateTime.now().millisecondsSinceEpoch}.jpg');
-      if (mounted) {
-        navigator.pop();
-      }
+      rightImageUrl = await uploadImageAndGetUrl(rightImg);
+      Navigator.of(context).pop();
     }
 
     Future<void> rightBuffer(BuildContext context) {

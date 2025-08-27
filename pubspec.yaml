@@ -51,6 +51,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - .env
 
 dependency_overrides:
   # Use embedding v2 implementation without new Pigeon/KSP-only APIs
